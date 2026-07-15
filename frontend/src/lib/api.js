@@ -74,6 +74,7 @@ export async function request(path, { method = "GET", body, retry = true } = {})
 export const api = {
   assets: (params = "") => request(`/assets/${params}`),
   users: () => request("/users/"),
+  createTag: (data) => request("/tags/", { method: "POST", body: data }),
   asset: (id) => request(`/assets/${id}/`),
   byTag: (uid) => request(`/assets/by-tag/${encodeURIComponent(uid)}/`),
   history: (id) => request(`/assets/${id}/history/`),
