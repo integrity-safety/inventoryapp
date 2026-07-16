@@ -86,10 +86,26 @@ export const api = {
   asset: (id) => request(`/assets/${id}/`),
   byTag: (uid) => request(`/assets/by-tag/${encodeURIComponent(uid)}/`),
   history: (id) => request(`/assets/${id}/history/`),
+  // createAsset / updateAsset accept a plain object (JSON) or FormData (photo).
   createAsset: (data) => request("/assets/", { method: "POST", body: data }),
+  deleteAsset: (id) => request(`/assets/${id}/`, { method: "DELETE" }),
   // transition accepts FormData (with optional photo) built by the caller.
   transition: (id, formData) =>
     request(`/assets/${id}/transition/`, { method: "POST", body: formData }),
+
+  // --- managed picklists (manager-gated writes; lists open for pickers) ---
+  categories: (params = "") => request(`/categories/${params}`),
+  createCategory: (data) => request("/categories/", { method: "POST", body: data }),
+  updateCategory: (id, data) => request(`/categories/${id}/`, { method: "PATCH", body: data }),
+  deleteCategory: (id) => request(`/categories/${id}/`, { method: "DELETE" }),
+  locations: (params = "") => request(`/locations/${params}`),
+  createLocation: (data) => request("/locations/", { method: "POST", body: data }),
+  updateLocation: (id, data) => request(`/locations/${id}/`, { method: "PATCH", body: data }),
+  deleteLocation: (id) => request(`/locations/${id}/`, { method: "DELETE" }),
+  suppliers: (params = "") => request(`/suppliers/${params}`),
+  createSupplier: (data) => request("/suppliers/", { method: "POST", body: data }),
+  updateSupplier: (id, data) => request(`/suppliers/${id}/`, { method: "PATCH", body: data }),
+  deleteSupplier: (id) => request(`/suppliers/${id}/`, { method: "DELETE" }),
 };
 
 export { BASE, API };

@@ -14,7 +14,10 @@ from .models import (
     MANAGER_ACTIONS,
     Asset,
     AssetStatus,
+    Category,
     Job,
+    Location,
+    Supplier,
     Tag,
     Transaction,
     TxAction,
@@ -22,8 +25,11 @@ from .models import (
 from .serializers import (
     AssetSerializer,
     BulkTransitionSerializer,
+    CategorySerializer,
     ConsumableSerializer,
     JobSerializer,
+    LocationSerializer,
+    SupplierSerializer,
     TagSerializer,
     TransactionSerializer,
     TransitionSerializer,
@@ -37,6 +43,27 @@ ACTIVE_STATUSES = [AssetStatus.ASSIGNED, AssetStatus.CHECKED_OUT, AssetStatus.IN
 
 def is_manager(user):
     return user.is_staff or user.groups.filter(name="Managers").exists()
+
+
+class ManagerWriteMixin:
+    """List/retrieve open to any authenticated user (so pickers work); create,
+    update, and delete require a manager."""
+
+    def _require_manager(self):
+        if not is_manager(self.request.user):
+            raise PermissionDenied("This action requires a manager.")
+
+    def perform_create(self, serializer):
+        self._require_manager()
+        serializer.save()
+
+    def perform_update(self, serializer):
+        self._require_manager()
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._require_manager()
+        instance.delete()
 
 
 def resolve_user(uid):
@@ -58,18 +85,35 @@ def resolve_job(jid):
 
 
 class AssetViewSet(viewsets.ModelViewSet):
-    queryset = Asset.objects.all().select_related("assigned_to", "job").prefetch_related("tags")
+    queryset = (
+        Asset.objects.all()
+        .select_related("assigned_to", "job", "category", "location", "supplier")
+        .prefetch_related("tags")
+    )
     serializer_class = AssetSerializer
 
     def get_queryset(self):
         qs = super().get_queryset()
         p = self.request.query_params
+        # Archived items are hidden from normal lists. ?archived=true shows only
+        # archived; ?archived=all shows both.
+        arch = p.get("archived")
+        if arch == "true":
+            qs = qs.filter(archived=True)
+        elif arch != "all":
+            qs = qs.filter(archived=False)
         if p.get("status"):
             qs = qs.filter(status=p["status"])
         if p.get("kind"):
             qs = qs.filter(kind=p["kind"])
         if p.get("job"):
             qs = qs.filter(job_id=p["job"])
+        if p.get("category"):
+            qs = qs.filter(category_id=p["category"])
+        if p.get("location"):
+            qs = qs.filter(location_id=p["location"])
+        if p.get("supplier"):
+            qs = qs.filter(supplier_id=p["supplier"])
         if p.get("q"):
             qs = qs.filter(Q(code__icontains=p["q"]) | Q(name__icontains=p["q"]))
         if p.get("overdue") == "true":
@@ -81,6 +125,25 @@ class AssetViewSet(viewsets.ModelViewSet):
         elif p.get("mine") == "held":
             qs = qs.filter(assigned_to=self.request.user, status__in=ACTIVE_STATUSES)
         return qs.distinct()
+
+    def perform_update(self, serializer):
+        # Any authenticated user may set an item's photo (from the asset detail
+        # screen); every other edit is manager-only.
+        if not is_manager(self.request.user):
+            if not set(serializer.validated_data.keys()).issubset({"image"}):
+                raise PermissionDenied("Only a manager can edit item details.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        # Never destroy an item that has ledger history; archive it instead so
+        # the audit trail survives. Pristine items can be hard-deleted.
+        if not is_manager(self.request.user):
+            raise PermissionDenied("Only a manager can delete items.")
+        if instance.transactions.exists():
+            raise ValidationError(
+                "This item has activity history. Archive it instead of deleting to keep the audit trail."
+            )
+        instance.delete()
 
     @action(detail=False, methods=["get"], url_path="by-tag/(?P<uid>[^/]+)")
     def by_tag(self, request, uid=None):
@@ -179,29 +242,31 @@ class AssetViewSet(viewsets.ModelViewSet):
         now = timezone.now()
         low_q = {"kind": "consumable", "min_quantity__gt": 0, "quantity__lte": F("min_quantity")}
 
-        mine_pending = Asset.objects.filter(assigned_to=me, status=AssetStatus.ASSIGNED)
-        overdue = Asset.objects.filter(due_at__lt=now, status__in=ACTIVE_STATUSES)
-        low_stock = Asset.objects.filter(**low_q)
+        # Archived items are retired; they never appear in dashboard feeds or counts.
+        base = Asset.objects.filter(archived=False)
+        mine_pending = base.filter(assigned_to=me, status=AssetStatus.ASSIGNED)
+        overdue = base.filter(due_at__lt=now, status__in=ACTIVE_STATUSES)
+        low_stock = base.filter(**low_q)
         data = {
             "my_pending": AssetSerializer(mine_pending, many=True, context=ctx).data,
             "overdue": AssetSerializer(overdue, many=True, context=ctx).data,
             "low_stock": AssetSerializer(low_stock, many=True, context=ctx).data,
         }
         if is_manager(me):
-            to_inspect = Asset.objects.filter(status=AssetStatus.RETURNED_PENDING)
+            to_inspect = base.filter(status=AssetStatus.RETURNED_PENDING)
             data["to_inspect"] = AssetSerializer(to_inspect, many=True, context=ctx).data
         else:
             data["to_inspect"] = []
         data["counts"] = {k: len(v) for k, v in data.items()}
 
         data["stats"] = {
-            "total": Asset.objects.count(),
-            "available": Asset.objects.filter(status=AssetStatus.AVAILABLE).count(),
-            "out": Asset.objects.filter(status__in=ACTIVE_STATUSES).count(),
+            "total": base.count(),
+            "available": base.filter(status=AssetStatus.AVAILABLE).count(),
+            "out": base.filter(status__in=ACTIVE_STATUSES).count(),
             "overdue": overdue.count(),
-            "maintenance": Asset.objects.filter(status=AssetStatus.MAINTENANCE).count(),
+            "maintenance": base.filter(status=AssetStatus.MAINTENANCE).count(),
             "low_stock": low_stock.count(),
-            "to_inspect": Asset.objects.filter(status=AssetStatus.RETURNED_PENDING).count(),
+            "to_inspect": base.filter(status=AssetStatus.RETURNED_PENDING).count(),
             "active_jobs": Job.objects.filter(status="active").count(),
         }
         return Response(data)
@@ -233,6 +298,39 @@ class JobViewSet(viewsets.ModelViewSet):
         job = self.get_object()
         qs = job.assets.all().select_related("assigned_to", "job").prefetch_related("tags")
         return Response(AssetSerializer(qs, many=True, context=self.get_serializer_context()).data)
+
+
+class CategoryViewSet(ManagerWriteMixin, viewsets.ModelViewSet):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if self.request.query_params.get("archived") != "all":
+            qs = qs.filter(archived=False)
+        return qs
+
+
+class LocationViewSet(ManagerWriteMixin, viewsets.ModelViewSet):
+    queryset = Location.objects.all()
+    serializer_class = LocationSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if self.request.query_params.get("archived") != "all":
+            qs = qs.filter(archived=False)
+        return qs
+
+
+class SupplierViewSet(ManagerWriteMixin, viewsets.ModelViewSet):
+    queryset = Supplier.objects.all()
+    serializer_class = SupplierSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if self.request.query_params.get("archived") != "all":
+            qs = qs.filter(archived=False)
+        return qs
 
 
 class TagViewSet(viewsets.ModelViewSet):

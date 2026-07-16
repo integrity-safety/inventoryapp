@@ -142,3 +142,33 @@ button.big { width: 100%; padding: 18px; font-size: 17px; margin-bottom: 10px; }
 .stat.danger .num { color: var(--danger); }
 .stat.warn .num { color: var(--warn); }
 .stat.ok .num { color: var(--ok); }
+
+/* --- v0.6 Manage hub --- */
+.subtabs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.subtab {
+  padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line);
+  background: transparent; color: var(--muted); font-size: 14px; cursor: pointer;
+}
+.subtab.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+
+.manage-form .form-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px;
+}
+@media (max-width: 520px) { .manage-form .form-grid { grid-template-columns: 1fr; } }
+.manage-form textarea {
+  width: 100%; background: var(--card2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; resize: vertical;
+}
+
+.manage-list { list-style: none; margin: 0; padding: 0; }
+.manage-list li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--line);
+}
+.manage-list li:last-child { border-bottom: 0; }
+.manage-list li.archived { opacity: .55; }
+.ml-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ml-main .name { font-weight: 600; }
+.ml-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.ml-actions .linkbtn { padding: 2px 4px; }
+.linkbtn.danger { color: var(--danger); }

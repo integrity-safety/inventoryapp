@@ -1,6 +1,27 @@
 from django.contrib import admin
 
-from .models import Asset, Job, Tag, Transaction, TransactionPhoto
+from .models import Asset, Category, Job, Location, Supplier, Tag, Transaction, TransactionPhoto
+
+
+@admin.register(Category)
+class CategoryAdmin(admin.ModelAdmin):
+    list_display = ["name", "archived", "created_at"]
+    list_filter = ["archived"]
+    search_fields = ["name"]
+
+
+@admin.register(Location)
+class LocationAdmin(admin.ModelAdmin):
+    list_display = ["name", "kind", "note", "archived", "created_at"]
+    list_filter = ["kind", "archived"]
+    search_fields = ["name", "note"]
+
+
+@admin.register(Supplier)
+class SupplierAdmin(admin.ModelAdmin):
+    list_display = ["name", "contact", "phone", "archived", "created_at"]
+    list_filter = ["archived"]
+    search_fields = ["name", "contact"]
 
 
 @admin.register(Job)
@@ -23,10 +44,10 @@ class TransactionPhotoInline(admin.TabularInline):
 
 @admin.register(Asset)
 class AssetAdmin(admin.ModelAdmin):
-    list_display = ["code", "name", "kind", "category", "status", "assigned_to", "job", "quantity", "due_at", "updated_at"]
-    list_filter = ["kind", "status", "category"]
-    search_fields = ["code", "name", "description"]
-    autocomplete_fields = ["job", "assigned_to"]
+    list_display = ["code", "name", "kind", "category", "location", "status", "assigned_to", "job", "quantity", "archived", "updated_at"]
+    list_filter = ["kind", "status", "category", "location", "archived"]
+    search_fields = ["code", "name", "description", "manufacturer", "model_number"]
+    autocomplete_fields = ["job", "assigned_to", "category", "location", "supplier"]
     inlines = [TagInline]
 
 

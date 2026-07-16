@@ -2,11 +2,23 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-from .views import AssetViewSet, JobViewSet, TagViewSet, TransactionViewSet, UserViewSet
+from .views import (
+    AssetViewSet,
+    CategoryViewSet,
+    JobViewSet,
+    LocationViewSet,
+    SupplierViewSet,
+    TagViewSet,
+    TransactionViewSet,
+    UserViewSet,
+)
 from .whoami import whoami
 
 router = DefaultRouter()
 router.register(r"assets", AssetViewSet, basename="asset")
+router.register(r"categories", CategoryViewSet, basename="category")
+router.register(r"locations", LocationViewSet, basename="location")
+router.register(r"suppliers", SupplierViewSet, basename="supplier")
 router.register(r"jobs", JobViewSet, basename="job")
 router.register(r"tags", TagViewSet, basename="tag")
 router.register(r"transactions", TransactionViewSet, basename="transaction")

@@ -8,6 +8,7 @@ import Scan from "./screens/Scan.jsx";
 import AssetDetail from "./screens/AssetDetail.jsx";
 import Inventory from "./screens/Inventory.jsx";
 import Jobs from "./screens/Jobs.jsx";
+import Manage from "./screens/Manage.jsx";
 
 function useAuth() {
   const [me, setMe] = useState(auth.isLoggedIn() ? "loading" : null);
@@ -46,6 +47,7 @@ function Nav({ me, onLogout }) {
         {tab("/scan", "Scan")}
         {tab("/inventory", "Inventory")}
         {tab("/jobs", "Jobs")}
+        {me.is_manager && tab("/manage", "Manage")}
       </nav>
       <div className="who">
         {pending > 0 && <span className="badge" title="Queued offline">{pending} queued</span>}
@@ -74,6 +76,7 @@ export default function App() {
           <Route path="/scan" element={<Scan />} />
           <Route path="/inventory" element={<Inventory me={me} />} />
           <Route path="/jobs" element={<Jobs me={me} />} />
+          <Route path="/manage" element={<Manage me={me} />} />
           <Route path="/asset/:id" element={<AssetDetail me={me} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

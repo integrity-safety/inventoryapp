@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from .models import Asset, Job, Tag, Transaction, TransactionPhoto
+from .models import Asset, Category, Job, Location, Supplier, Tag, Transaction, TransactionPhoto
 
 User = get_user_model()
 
@@ -10,6 +10,54 @@ class UserBriefSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["id", "username", "first_name", "last_name"]
+
+
+class CategorySerializer(serializers.ModelSerializer):
+    asset_count = serializers.IntegerField(source="assets.count", read_only=True)
+
+    class Meta:
+        model = Category
+        fields = ["id", "name", "archived", "asset_count", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+
+class CategoryBriefSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = ["id", "name"]
+
+
+class LocationSerializer(serializers.ModelSerializer):
+    kind_display = serializers.CharField(source="get_kind_display", read_only=True)
+    asset_count = serializers.IntegerField(source="assets.count", read_only=True)
+
+    class Meta:
+        model = Location
+        fields = ["id", "name", "kind", "kind_display", "note", "archived", "asset_count", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+
+class LocationBriefSerializer(serializers.ModelSerializer):
+    kind_display = serializers.CharField(source="get_kind_display", read_only=True)
+
+    class Meta:
+        model = Location
+        fields = ["id", "name", "kind", "kind_display"]
+
+
+class SupplierSerializer(serializers.ModelSerializer):
+    asset_count = serializers.IntegerField(source="assets.count", read_only=True)
+
+    class Meta:
+        model = Supplier
+        fields = ["id", "name", "contact", "phone", "note", "archived", "asset_count", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+
+class SupplierBriefSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Supplier
+        fields = ["id", "name"]
 
 
 class JobSerializer(serializers.ModelSerializer):
@@ -72,15 +120,41 @@ class AssetSerializer(serializers.ModelSerializer):
     is_overdue = serializers.BooleanField(read_only=True)
     low_stock = serializers.BooleanField(read_only=True)
 
+    # Managed picklists: nested object on read, *_id on write.
+    category = CategoryBriefSerializer(read_only=True)
+    category_id = serializers.PrimaryKeyRelatedField(
+        source="category", queryset=Category.objects.all(),
+        required=False, allow_null=True, write_only=True,
+    )
+    location = LocationBriefSerializer(read_only=True)
+    location_id = serializers.PrimaryKeyRelatedField(
+        source="location", queryset=Location.objects.all(),
+        required=False, allow_null=True, write_only=True,
+    )
+    supplier = SupplierBriefSerializer(read_only=True)
+    supplier_id = serializers.PrimaryKeyRelatedField(
+        source="supplier", queryset=Supplier.objects.all(),
+        required=False, allow_null=True, write_only=True,
+    )
+    unit_of_measure_display = serializers.CharField(source="get_unit_of_measure_display", read_only=True)
+
     class Meta:
         model = Asset
         fields = [
-            "id", "code", "name", "description", "category", "kind", "status",
-            "status_display", "assigned_to", "job", "job_ref", "due_at",
-            "quantity", "min_quantity", "low_stock", "is_overdue", "image",
+            "id", "code", "name", "description",
+            "category", "category_id", "kind", "status", "status_display",
+            "assigned_to", "job", "job_ref", "due_at",
+            "location", "location_id", "supplier", "supplier_id",
+            "manufacturer", "model_number", "unit_cost",
+            "unit_of_measure", "unit_of_measure_display",
+            "quantity", "min_quantity", "max_quantity",
+            "low_stock", "is_overdue", "archived", "image",
             "tags", "created_at", "updated_at",
         ]
-        read_only_fields = ["id", "status", "assigned_to", "job", "due_at", "is_overdue", "low_stock", "created_at", "updated_at"]
+        read_only_fields = [
+            "id", "status", "assigned_to", "job", "due_at",
+            "is_overdue", "low_stock", "created_at", "updated_at",
+        ]
 
 
 class TransitionSerializer(serializers.Serializer):

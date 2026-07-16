@@ -117,7 +117,7 @@ export default function AssetDetail({ me }) {
           <div>
             <div className="code">{asset.code}</div>
             <h2>{asset.name}</h2>
-            {asset.category && <div className="muted small">{asset.category}</div>}
+            {asset.category && <div className="muted small">{asset.category.name}</div>}
           </div>
           {isConsumable
             ? <span className={`pill ${asset.low_stock ? "s-maintenance" : "s-available"}`}>{asset.quantity} on hand</span>
@@ -128,7 +128,14 @@ export default function AssetDetail({ me }) {
         {asset.assigned_to && <div className="muted small">Held by {asset.assigned_to.username}</div>}
         {asset.job && <div className="muted small">Job: {asset.job.code} — {asset.job.name}</div>}
         {dueStr && <div className={asset.is_overdue ? "small" : "muted small"} style={asset.is_overdue ? { color: "var(--danger)" } : null}>Due back: {dueStr}</div>}
-        {isConsumable && asset.min_quantity > 0 && <div className="muted small">Reorder point: {asset.min_quantity}</div>}
+        {asset.location && <div className="muted small">Location: {asset.location.name}</div>}
+        {(asset.manufacturer || asset.model_number) && (
+          <div className="muted small">{[asset.manufacturer, asset.model_number].filter(Boolean).join(" ")}</div>
+        )}
+        {asset.supplier && <div className="muted small">Supplier: {asset.supplier.name}</div>}
+        {asset.unit_cost && <div className="muted small">Unit cost: ${asset.unit_cost}</div>}
+        {isConsumable && <div className="muted small">Counted in: {asset.unit_of_measure_display}</div>}
+        {isConsumable && asset.min_quantity > 0 && <div className="muted small">Reorder point: {asset.min_quantity}{asset.max_quantity ? ` · target ${asset.max_quantity}` : ""}</div>}
         {asset.image && <img className="asset-img" src={asset.image} alt="" />}
         <label className="photo-label small">{asset.image ? "Change item photo" : "Add a photo of this item"}
           <input type="file" accept="image/*" capture="environment" onChange={(e) => setAssetPhoto(e.target.files[0])} />
