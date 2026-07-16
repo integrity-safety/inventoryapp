@@ -3,14 +3,14 @@
 databases:
   - name: inventory-db
     databaseName: inventory
-    plan: free
+    plan: basic-256mb
 
 services:
   # --- Django API + admin -----------------------------------------------
   - type: web
     name: inventory-api
     runtime: python
-    plan: free
+    plan: starter
     rootDir: backend
     buildCommand: "./build.sh"
     startCommand: "gunicorn config.wsgi:application"
