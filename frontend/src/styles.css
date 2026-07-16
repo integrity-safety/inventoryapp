@@ -109,3 +109,22 @@ button.big { width: 100%; padding: 18px; font-size: 17px; margin-bottom: 10px; }
   border-top: 1px solid var(--line); text-decoration: none; color: var(--ink);
 }
 .asset-list .name { flex: 1; }
+
+.tabbadge {
+  display: inline-block; margin-left: 5px; min-width: 16px; padding: 0 5px;
+  background: var(--danger); color: #3a1010; border-radius: 999px;
+  font-size: 11px; font-weight: 700; text-align: center;
+}
+.count { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--card2); font-size: 12px; }
+.count.danger { background: #3a1d1d; color: var(--danger); }
+.count.warn { background: #3a2c0e; color: var(--warn); }
+.count.accent { background: #0e2f45; color: var(--accent); }
+
+.chiprow { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.chip { padding: 6px 14px; border-radius: 999px; background: var(--card2); color: var(--muted); font-size: 14px; }
+.chip.on { background: var(--accent); color: var(--accent-ink); }
+
+.selrow { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-top: 1px solid var(--line); }
+.selrow:first-child { border-top: 0; }
+.selrow a { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
+.selrow input[type="checkbox"] { width: 20px; height: 20px; margin: 0; flex: 0 0 auto; }

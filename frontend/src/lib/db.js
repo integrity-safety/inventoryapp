@@ -47,7 +47,7 @@ export async function flushOutbox() {
       const fd = new FormData();
       fd.append("action", item.fields.action);
       fd.append("client_uuid", item.client_uuid);
-      for (const k of ["counterparty", "job_ref", "note", "latitude", "longitude"]) {
+      for (const k of ["counterparty", "job", "job_ref", "due_at", "note", "latitude", "longitude"]) {
         if (item.fields[k] !== undefined && item.fields[k] !== null && item.fields[k] !== "") {
           fd.append(k, item.fields[k]);
         }

@@ -97,6 +97,7 @@ function RegisterTag({ unknown, onCancel, onDone }) {
   const [assetId, setAssetId] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [photo, setPhoto] = useState(null);
 
   useEffect(() => {
     if (choice === "existing" && assets.length === 0) {
@@ -110,7 +111,12 @@ function RegisterTag({ unknown, onCancel, onDone }) {
     try {
       let targetId = assetId;
       if (choice === "new") {
-        const asset = await api.createAsset({ code: code.trim(), name: name.trim() });
+        // Multipart so we can attach the item's photo in the same request.
+        const fd = new FormData();
+        fd.append("code", code.trim());
+        fd.append("name", name.trim());
+        if (photo) fd.append("image", photo);
+        const asset = await api.createAsset(fd);
         targetId = asset.id;
       }
       if (!targetId) throw new Error("Pick an asset to link this tag to.");
@@ -145,6 +151,11 @@ function RegisterTag({ unknown, onCancel, onDone }) {
             <label>Name
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. DeWalt impact driver" />
             </label>
+            <label className="photo-label">Photo of the item (optional)
+              <input type="file" accept="image/*" capture="environment"
+                onChange={(e) => setPhoto(e.target.files[0] || null)} />
+            </label>
+            {photo && <img className="preview" src={URL.createObjectURL(photo)} alt="preview" />}
           </>
         ) : (
           <label>Link to

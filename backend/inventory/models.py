@@ -2,6 +2,7 @@ import uuid
 
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 class AssetStatus(models.TextChoices):
@@ -14,6 +15,11 @@ class AssetStatus(models.TextChoices):
     LOST = "lost", "Lost"
 
 
+class AssetKind(models.TextChoices):
+    SERIALIZED = "serialized", "Serialized (tracked individually)"
+    CONSUMABLE = "consumable", "Consumable (tracked by quantity)"
+
+
 class TxAction(models.TextChoices):
     REGISTER = "register", "Register"
     ASSIGN = "assign", "Assign"
@@ -22,28 +28,61 @@ class TxAction(models.TextChoices):
     ACCEPT_RETURN = "accept_return", "Accept return"
     TO_MAINTENANCE = "to_maintenance", "Send to maintenance"
     MARK_LOST = "mark_lost", "Mark lost"
+    ISSUE = "issue", "Issue (consumable)"
+    RESTOCK = "restock", "Restock (consumable)"
+
+
+class Job(models.Model):
+    """A job / project / cost code that assets get allocated to."""
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        CLOSED = "closed", "Closed"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    code = models.CharField(max_length=64, unique=True, help_text="Job/project code, e.g. JOB-42")
+    name = models.CharField(max_length=200)
+    site = models.CharField(max_length=200, blank=True, help_text="Jobsite / location")
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.ACTIVE)
+    foreman = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="jobs"
+    )
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-status", "code"]
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"
 
 
 class Asset(models.Model):
-    """A trackable physical item. Its current status is a cached projection of
-    the append-only Transaction ledger."""
+    """A trackable item. Serialized assets move through the custody state
+    machine; consumables are tracked by on-hand quantity."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     code = models.CharField(max_length=64, unique=True, help_text="Human-readable asset ID, also printed on the label")
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     category = models.CharField(max_length=100, blank=True)
+    kind = models.CharField(max_length=16, choices=AssetKind.choices, default=AssetKind.SERIALIZED)
+
     status = models.CharField(
         max_length=32, choices=AssetStatus.choices, default=AssetStatus.AVAILABLE
     )
     assigned_to = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="held_assets",
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="held_assets"
     )
-    job_ref = models.CharField(max_length=120, blank=True, help_text="Current job/project the asset is out on")
+    job = models.ForeignKey(Job, null=True, blank=True, on_delete=models.SET_NULL, related_name="assets")
+    job_ref = models.CharField(max_length=120, blank=True, help_text="Free-text job note (legacy / when no Job record)")
+    due_at = models.DateTimeField(null=True, blank=True, help_text="When the current checkout is due back")
+
+    # Consumable-only fields.
+    quantity = models.IntegerField(default=1, help_text="On-hand quantity (consumables)")
+    min_quantity = models.IntegerField(default=0, help_text="Reorder point; low stock at or below this (consumables)")
+
     image = models.ImageField(upload_to="assets/", null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -54,10 +93,21 @@ class Asset(models.Model):
     def __str__(self):
         return f"{self.code} - {self.name}"
 
+    @property
+    def is_overdue(self):
+        return bool(
+            self.due_at
+            and self.status in (AssetStatus.ASSIGNED, AssetStatus.CHECKED_OUT, AssetStatus.IN_TRANSIT)
+            and self.due_at < timezone.now()
+        )
+
+    @property
+    def low_stock(self):
+        return self.kind == AssetKind.CONSUMABLE and self.min_quantity > 0 and self.quantity <= self.min_quantity
+
 
 class Tag(models.Model):
-    """A physical tag bound to an asset. One asset can carry several (an NFC
-    chip plus a printed QR/barcode on the same combo label)."""
+    """A physical tag bound to an asset (NFC chip and/or printed QR/barcode)."""
 
     class TagType(models.TextChoices):
         NFC = "nfc", "NFC"
@@ -67,12 +117,8 @@ class Tag(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE, related_name="tags")
     tag_type = models.CharField(max_length=16, choices=TagType.choices, default=TagType.NFC)
-    uid = models.CharField(
-        max_length=128,
-        unique=True,
-        help_text="NFC chip UID, or the payload printed/encoded on the tag (URL, code)",
-    )
-    locked = models.BooleanField(default=False, help_text="Tag has been write-locked in the field")
+    uid = models.CharField(max_length=128, unique=True, help_text="NFC chip UID or encoded payload")
+    locked = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -80,31 +126,26 @@ class Tag(models.Model):
 
 
 class Transaction(models.Model):
-    """Immutable, append-only record of a single state change. Never edited or
-    deleted. This is the audit trail / chain of custody."""
+    """Immutable, append-only record of a single change. Never edited."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE, related_name="transactions")
     action = models.CharField(max_length=32, choices=TxAction.choices)
     from_status = models.CharField(max_length=32, choices=AssetStatus.choices, blank=True)
-    to_status = models.CharField(max_length=32, choices=AssetStatus.choices)
+    to_status = models.CharField(max_length=32, choices=AssetStatus.choices, blank=True)
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="tx_performed"
     )
     counterparty = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="tx_counterparty",
-        help_text="The other party in a two-factor handoff",
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="tx_counterparty"
     )
+    job = models.ForeignKey(Job, null=True, blank=True, on_delete=models.SET_NULL, related_name="transactions")
     job_ref = models.CharField(max_length=120, blank=True)
+    due_at = models.DateTimeField(null=True, blank=True)
+    quantity_delta = models.IntegerField(null=True, blank=True, help_text="Consumable change (+restock / -issue)")
     note = models.TextField(blank=True)
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
-    # Client-generated UUID makes offline sync idempotent: replaying a queued
-    # transaction with the same key is a no-op instead of a duplicate.
     client_uuid = models.UUIDField(unique=True, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -123,16 +164,15 @@ class TransactionPhoto(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE, related_name="photos")
     image = models.ImageField(upload_to=photo_upload_path)
-    sha256 = models.CharField(max_length=64, blank=True, help_text="Hash of the image bytes for tamper-evidence")
+    sha256 = models.CharField(max_length=64, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"photo for {self.transaction_id}"
 
 
-# --- State machine -----------------------------------------------------------
-# Allowed (action -> (required_from_statuses, resulting_status)). A transition
-# is rejected unless the asset's current status is in required_from_statuses.
+# --- State machine (serialized assets) ---------------------------------------
+# action -> (required_from_statuses or None, resulting_status)
 
 ALLOWED_TRANSITIONS = {
     TxAction.REGISTER: (None, AssetStatus.AVAILABLE),
@@ -141,11 +181,11 @@ ALLOWED_TRANSITIONS = {
     TxAction.CONFIRM_RETURN: ({AssetStatus.CHECKED_OUT, AssetStatus.IN_TRANSIT}, AssetStatus.RETURNED_PENDING),
     TxAction.ACCEPT_RETURN: ({AssetStatus.RETURNED_PENDING}, AssetStatus.AVAILABLE),
     TxAction.TO_MAINTENANCE: (
-        {AssetStatus.AVAILABLE, AssetStatus.RETURNED_PENDING, AssetStatus.CHECKED_OUT},
+        {AssetStatus.AVAILABLE, AssetStatus.RETURNED_PENDING, AssetStatus.CHECKED_OUT, AssetStatus.MAINTENANCE},
         AssetStatus.MAINTENANCE,
     ),
     TxAction.MARK_LOST: (None, AssetStatus.LOST),
 }
 
-# Actions that require a manager (staff or member of the "Managers" group).
-MANAGER_ACTIONS = {TxAction.ACCEPT_RETURN, TxAction.TO_MAINTENANCE, TxAction.MARK_LOST}
+# Actions restricted to managers (staff or "Managers" group).
+MANAGER_ACTIONS = {TxAction.ACCEPT_RETURN, TxAction.TO_MAINTENANCE, TxAction.MARK_LOST, TxAction.RESTOCK}

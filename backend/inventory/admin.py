@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from .models import Asset, Tag, Transaction, TransactionPhoto
+from .models import Asset, Job, Tag, Transaction, TransactionPhoto
+
+
+@admin.register(Job)
+class JobAdmin(admin.ModelAdmin):
+    list_display = ["code", "name", "site", "status", "foreman", "start_date", "end_date"]
+    list_filter = ["status"]
+    search_fields = ["code", "name", "site"]
 
 
 class TagInline(admin.TabularInline):
@@ -16,9 +23,10 @@ class TransactionPhotoInline(admin.TabularInline):
 
 @admin.register(Asset)
 class AssetAdmin(admin.ModelAdmin):
-    list_display = ["code", "name", "category", "status", "assigned_to", "job_ref", "updated_at"]
-    list_filter = ["status", "category"]
+    list_display = ["code", "name", "kind", "category", "status", "assigned_to", "job", "quantity", "due_at", "updated_at"]
+    list_filter = ["kind", "status", "category"]
     search_fields = ["code", "name", "description"]
+    autocomplete_fields = ["job", "assigned_to"]
     inlines = [TagInline]
 
 

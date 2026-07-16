@@ -101,7 +101,7 @@ STORAGES = {
 # Uploaded step photos. NOTE: Render's default filesystem is ephemeral, so for
 # production attach a Render persistent disk mounted at MEDIA_ROOT, or switch
 # to S3 / Cloudinary via django-storages. See README.
-MEDIA_URL = "media/"
+MEDIA_URL = "/media/"
 MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT", BASE_DIR / "media"))
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
@@ -147,3 +147,15 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # Allow field employees to assign assets to themselves (vs manager-only assign).
 ALLOW_SELF_ASSIGN = env_bool("ALLOW_SELF_ASSIGN", True)
+
+# --- Media / image hosting ---------------------------------------------------
+# Uploaded photos need durable, publicly served hosting. Django does not serve
+# media when DEBUG=False, and Render's disk is ephemeral, so local storage does
+# not work in production. If CLOUDINARY_URL is set, store media on Cloudinary
+# (free tier, CDN-served, survives redeploys). The cloudinary library reads
+# CLOUDINARY_URL from the environment automatically. Falls back to the local
+# filesystem for local development when the variable is absent.
+CLOUDINARY_URL = os.environ.get("CLOUDINARY_URL")
+if CLOUDINARY_URL:
+    INSTALLED_APPS += ["cloudinary_storage", "cloudinary"]
+    STORAGES["default"] = {"BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage"}
