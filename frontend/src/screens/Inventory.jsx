@@ -75,6 +75,7 @@ export default function Inventory({ me }) {
         </form>
         <div className="chiprow">
           <button className={quick === "" ? "chip on" : "chip"} onClick={() => setQuick("")}>All</button>
+          <button className={quick === "out" ? "chip on" : "chip"} onClick={() => setQuick("out")}>Out</button>
           <button className={quick === "overdue" ? "chip on" : "chip"} onClick={() => setQuick("overdue")}>Overdue</button>
           <button className={quick === "low_stock" ? "chip on" : "chip"} onClick={() => setQuick("low_stock")}>Low stock</button>
         </div>

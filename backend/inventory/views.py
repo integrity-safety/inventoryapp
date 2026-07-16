@@ -116,6 +116,8 @@ class AssetViewSet(viewsets.ModelViewSet):
             qs = qs.filter(supplier_id=p["supplier"])
         if p.get("q"):
             qs = qs.filter(Q(code__icontains=p["q"]) | Q(name__icontains=p["q"]))
+        if p.get("out") == "true":
+            qs = qs.filter(status__in=ACTIVE_STATUSES)
         if p.get("overdue") == "true":
             qs = qs.filter(due_at__lt=timezone.now(), status__in=ACTIVE_STATUSES)
         if p.get("low_stock") == "true":

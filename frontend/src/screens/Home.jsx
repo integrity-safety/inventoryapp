@@ -49,7 +49,7 @@ export default function Home({ me }) {
       {s && (
         <div className="stat-grid">
           <Stat label="Total items" value={st.total ?? "–"} to="/inventory" />
-          <Stat label="Checked out" value={st.out ?? "–"} tone="accent" to="/inventory?status=checked_out" />
+          <Stat label="Out" value={st.out ?? "–"} tone="accent" to="/inventory?quick=out" />
           <Stat label="Overdue" value={st.overdue ?? "–"} tone="danger" to="/inventory?quick=overdue" />
           <Stat label="Available" value={st.available ?? "–"} tone="ok" to="/inventory?status=available" />
           {me.is_manager && <Stat label="To inspect" value={st.to_inspect ?? "–"} tone="accent" to="/inventory?status=returned_pending" />}
