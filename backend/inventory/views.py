@@ -173,12 +173,15 @@ class AssetViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"])
     def summary(self, request):
-        """In-app notification feed for the current user."""
+        """Dashboard payload: at-a-glance stats plus the action feed."""
         ctx = self.get_serializer_context()
         me = request.user
+        now = timezone.now()
+        low_q = {"kind": "consumable", "min_quantity__gt": 0, "quantity__lte": F("min_quantity")}
+
         mine_pending = Asset.objects.filter(assigned_to=me, status=AssetStatus.ASSIGNED)
-        overdue = Asset.objects.filter(due_at__lt=timezone.now(), status__in=ACTIVE_STATUSES)
-        low_stock = Asset.objects.filter(kind="consumable", min_quantity__gt=0, quantity__lte=F("min_quantity"))
+        overdue = Asset.objects.filter(due_at__lt=now, status__in=ACTIVE_STATUSES)
+        low_stock = Asset.objects.filter(**low_q)
         data = {
             "my_pending": AssetSerializer(mine_pending, many=True, context=ctx).data,
             "overdue": AssetSerializer(overdue, many=True, context=ctx).data,
@@ -190,6 +193,17 @@ class AssetViewSet(viewsets.ModelViewSet):
         else:
             data["to_inspect"] = []
         data["counts"] = {k: len(v) for k, v in data.items()}
+
+        data["stats"] = {
+            "total": Asset.objects.count(),
+            "available": Asset.objects.filter(status=AssetStatus.AVAILABLE).count(),
+            "out": Asset.objects.filter(status__in=ACTIVE_STATUSES).count(),
+            "overdue": overdue.count(),
+            "maintenance": Asset.objects.filter(status=AssetStatus.MAINTENANCE).count(),
+            "low_stock": low_stock.count(),
+            "to_inspect": Asset.objects.filter(status=AssetStatus.RETURNED_PENDING).count(),
+            "active_jobs": Job.objects.filter(status="active").count(),
+        }
         return Response(data)
 
     # --- helpers ---

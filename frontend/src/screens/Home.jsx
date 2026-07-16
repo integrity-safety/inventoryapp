@@ -2,10 +2,18 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../lib/api.js";
 
-function Section({ title, items, tone, empty }) {
-  if (!items || items.length === 0) {
-    return null;
-  }
+function Stat({ label, value, tone, to }) {
+  const nav = useNavigate();
+  return (
+    <button className={`stat ${tone || ""}`} onClick={() => to && nav(to)} disabled={!to}>
+      <div className="num">{value}</div>
+      <div className="lbl">{label}</div>
+    </button>
+  );
+}
+
+function Section({ title, items, tone }) {
+  if (!items || items.length === 0) return null;
   return (
     <div className="card">
       <h3>{title} <span className={`count ${tone || ""}`}>{items.length}</span></h3>
@@ -31,20 +39,31 @@ export default function Home({ me }) {
   const [s, setS] = useState(null);
   const [err, setErr] = useState("");
 
-  useEffect(() => {
-    api.summary().then(setS).catch((e) => setErr(e.message));
-  }, []);
+  useEffect(() => { api.summary().then(setS).catch((e) => setErr(e.message)); }, []);
 
+  const st = s?.stats || {};
   const nothing = s && Object.values(s.counts || {}).every((n) => n === 0);
 
   return (
     <div className="stack">
-      <div className="card">
-        <button className="big" onClick={() => nav("/scan")}>Scan a tag</button>
-      </div>
+      {s && (
+        <div className="stat-grid">
+          <Stat label="Total items" value={st.total ?? "–"} to="/inventory" />
+          <Stat label="Checked out" value={st.out ?? "–"} tone="accent" to="/inventory?status=checked_out" />
+          <Stat label="Overdue" value={st.overdue ?? "–"} tone="danger" to="/inventory?quick=overdue" />
+          <Stat label="Available" value={st.available ?? "–"} tone="ok" to="/inventory?status=available" />
+          {me.is_manager && <Stat label="To inspect" value={st.to_inspect ?? "–"} tone="accent" to="/inventory?status=returned_pending" />}
+          <Stat label="Low stock" value={st.low_stock ?? "–"} tone="warn" to="/inventory?quick=low_stock" />
+          <Stat label="In maintenance" value={st.maintenance ?? "–"} to="/inventory?status=maintenance" />
+          <Stat label="Active jobs" value={st.active_jobs ?? "–"} to="/jobs" />
+        </div>
+      )}
+
+      <div className="card"><button className="big" onClick={() => nav("/scan")}>Scan a tag</button></div>
+
       {err && <div className="card error">{err}</div>}
       {!s && !err && <div className="card muted">Loading…</div>}
-      {nothing && <div className="card muted">You're all caught up. Nothing needs attention.</div>}
+      {nothing && <div className="card muted">Nothing needs your attention right now.</div>}
       {s && <Section title="Waiting for you to accept" items={s.my_pending} tone="warn" />}
       {s && me.is_manager && <Section title="Returned, needs inspection" items={s.to_inspect} tone="accent" />}
       {s && <Section title="Overdue" items={s.overdue} tone="danger" />}

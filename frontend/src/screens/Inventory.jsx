@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api.js";
 
 const STATUSES = ["", "available", "assigned", "checked_out", "returned_pending", "maintenance", "lost"];
 
 export default function Inventory({ me }) {
+  const [params] = useSearchParams();
   const [items, setItems] = useState([]);
-  const [q, setQ] = useState("");
-  const [statusF, setStatusF] = useState("");
-  const [quick, setQuick] = useState(""); // "" | "overdue" | "low_stock"
+  const [q, setQ] = useState(params.get("q") || "");
+  const [statusF, setStatusF] = useState(params.get("status") || "");
+  const [quick, setQuick] = useState(params.get("quick") || ""); // "" | "overdue" | "low_stock"
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(new Set());
   const [assignOpen, setAssignOpen] = useState(false);
